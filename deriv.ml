@@ -142,7 +142,7 @@ let rec parser ?(is_math=false) tokens exprs =
         []
       | RPAR :: _ -> e, tl
       | POWER :: tl -> let ex, tl = parser ~is_math:true tl [] in
-        firsts e @ [BinOp(last e, Pow, reduce ex)], tl
+        parser tl (firsts e @ [BinOp(last e, Pow, reduce ex)])
       | _ -> parser tl e
     end
   | true ->
@@ -263,7 +263,7 @@ let rec repl () =
   let p = reduce (fst e) in
   List.iter
     (fun x -> print_endline ("df/d" ^ x ^ ": " ^ (pprint (simplify (derivate p x)))))
-    (free_vars p);
+    (List.sort_uniq compare (free_vars p));
   repl()
 
 let _ = repl()
