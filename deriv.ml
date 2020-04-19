@@ -90,9 +90,8 @@ let rec parser ?(is_math=false) tokens exprs =
       | tl           -> lval, tl
     in
     match ntl with
-      TIMES :: _ | DIV :: _ ->
-      parse_mul ntl nval
-    | _                        -> nval, ntl
+      TIMES :: _ | DIV :: _ -> parse_mul ntl nval
+    | _                     -> nval, ntl
   in
   let rec parse_add tokens lval =
     let nval, ntl =
@@ -106,9 +105,8 @@ let rec parser ?(is_math=false) tokens exprs =
       | tl           -> lval, tl
     in
     match ntl with
-      TIMES :: _ | DIV :: _ ->
-      parse_mul ntl nval
-    | _                        -> nval, ntl
+      PLUS :: _ | MINUS :: _ -> parse_add ntl nval
+    | _                      -> nval, ntl
   in
   let rec parse_par tokens =
     let e, tl = parser tokens [] in
@@ -211,6 +209,7 @@ let rec simplify e =
   | BinOp (e, Mult, Const 1)
   | BinOp (e, Div, Const 1)
   | BinOp (Const 1, Mult, e)
+  | App ("exp", App("log", e))
   | BinOp (e, Pow, Const 1) -> simplify e
   | BinOp (_, Pow, Const 0)
   | BinOp (Const 1, Pow, _) -> Const 1
@@ -225,9 +224,11 @@ let rec simplify e =
   | BinOp (Const n, Mult, Const m) -> Const (n * m)
   | BinOp (Const n, Div, Const m) -> Const (n / m)
   | BinOp (BinOp (Const n, Mult, x), Plus, (BinOp(Const m, Mult, y))) when x = y ->
-    BinOp (Const (n + m), Mult, x)
+    BinOp (Const (n + m), Mult, simplify x)
   | BinOp (BinOp (Const n, Mult, x), Minus, (BinOp(Const m, Mult, y))) when x = y ->
-    BinOp (Const (n - m), Mult, x)
+    BinOp (Const (n - m), Mult, simplify x)
+  | BinOp (g, Mult, BinOp(n, Div, d)) when g = d -> simplify n
+  | BinOp (BinOp(n, Div, g), Mult, d) when g = d -> simplify n
   | BinOp (g, o, d) ->
     let g' = simplify g in
     let d' = simplify d in
