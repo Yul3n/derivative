@@ -69,7 +69,7 @@ type op
 
 type expr
   = Var of string
-  | App of expr * expr
+  | App of string * expr
   | BinOp of expr * op * expr
   | Const of int
 
@@ -123,7 +123,7 @@ let rec parser ?(is_math=false) tokens exprs =
       NUM n :: tl -> exprs @ [Const n], tl
     | VAR v :: LPAR :: tl ->
       let e, tl = parse_par tl in
-      let b = App(Var v, reduce e) in
+      let b = App(v, reduce e) in
       exprs @ [b], tl
     | VAR v :: tl -> exprs @ [Var v], tl
     | LPAR :: tl ->
@@ -165,8 +165,9 @@ let rec derivate e v =
   match e with
     e when is_const e v -> Const 0
   | Var x when x = v -> Const 1
-  | BinOp (e, Pow, Const n) ->
-    BinOp (Const n, Mult, BinOp(e, Pow, Const (n - 1)))
+  | BinOp (f, Pow, e) ->
+    let f' = derivate f v in
+    BinOp (BinOp (e, Mult, BinOp(f, Pow, BinOp(e, Minus, Const 1))), Mult, f')
   | BinOp (f, Mult, g) ->
     let f' = derivate f v in
     let g' = derivate g v in
@@ -180,12 +181,12 @@ let rec derivate e v =
     let f' = derivate f v in
     let g' = derivate g v in
     BinOp (f', Plus, g')
-  | App (Var f, x) ->
+  | App (f, x) ->
     let get_der f x =
       match f with
-        "sin" -> App(Var "cos", x)
-      | "cos" -> BinOp (Const (-1), Mult, App(Var "sin", x))
-      | "exp" -> App(Var "exp", x)
+        "sin" -> App("cos", x)
+      | "cos" -> BinOp (Const (-1), Mult, App("sin", x))
+      | "exp" -> App("exp", x)
       | "log" -> BinOp(Const 1, Div, x)
       | _ -> raise Not_found
     in
@@ -236,8 +237,17 @@ let rec simplify e =
     else BinOp(g', o, d')
 
 let rec pprint e =
+  match e with
+    Const n -> string_of_int n
+  | Var v   -> v
+  | App (f, x) -> f ^ "(" ^ (pprint x) ^ ")"
+  | BinOp (g, Plus, d) -> (pprint g) ^ " + " ^ (pprint d)
+  | BinOp (g, Minus, d) -> (pprint g) ^ " - " ^ (pprint d)
+  | BinOp (g, Mult, d) -> "(" ^ (pprint g) ^ ") * (" ^ (pprint d) ^ ")"
+  | BinOp (g, Div, d) -> "(" ^ (pprint g) ^ ") / (" ^ (pprint d) ^ ")"
+  | BinOp (g, Pow, d) -> "(" ^ (pprint g) ^ ") ^ (" ^ (pprint d) ^ ")"
 
-let repl () =
+let rec repl () =
   print_string "> ";
   let s   = read_line () in
   let len = String.length s in
@@ -250,4 +260,9 @@ let repl () =
   let tokens = lex 0 in
   let e = parser tokens [] in
   let p = reduce (fst e) in
-  List.map (fun x -> simplify (derivate p x)) (free_vars p)
+  List.iter
+    (fun x -> print_endline ("df/d" ^ x ^ ": " ^ (pprint (simplify (derivate p x)))))
+    (free_vars p);
+  repl()
+
+let _ = repl()
